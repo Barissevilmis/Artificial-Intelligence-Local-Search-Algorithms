@@ -1,8 +1,11 @@
 import random
 import sys
 import time
+import math
 import copy
-from math import exp
+import numpy as np
+import scipy.stats
+import pandas as pd
             
 #Conflict amount of a single queen with other queens in terms of rows and queens diagonal locations
 def CostQueen(board, key, size):
@@ -97,99 +100,115 @@ def FirstChoiceHillClimbing(board,size):
         if TotalCost(tempState,size) == TotalCost(currentState,size):
             return currentState
 
-#Calculate Energy Probability for Simulated Annealing
-def EnergyCalculator(energy,temperatur):
-
-    valE = exp(-(energy)/temperatur)
-    rand = random.random()
-   
-
-    if rand < valE :
-        return True
-    
-    return False
     
 
 #Choose a random Successor=> If it is better then continue; else only continue with probability of EnergyCalculator
 #Starting Temperatur can be assigned differently, also Mapping function of time(iteration) to temperature can be assigned differently
 #Possible Optimization: Don't choose random succesor but better succesor, only when it blocks use temperature technique
-def SimulatedAnnealing(board,size):
+def SimulatedAnnealing(currentState,size,totalCost):
 
-    currentState = copy.deepcopy(board)
     nextState = {}
     
-    #bs => Better Succesor, ws => Worst Succesor
-
-    #bs = 0
-    #ws = 0
-    t = 0
-    T = 1
+    #Scheduling Function: works fast for both small and large sizes(Success amount relatively small also in small size compared to first function) 
+    #T_0 = 25000000 
+    #T_0 = 3000000
+    #T_0 = 110000
+    #T_0 = 18000
+    #Cooling Factor must be greater than 0,95 for success in 100 states
+    #T = T_0*pow(0.99,t)
+    #T = T_0*pow(0.98,t)
+    
+    #Current Parameters: Nearly 100% success for 10-100 size
+    t = 1
+    T_0 = 18000 
     while True:
-        #Decrease coolFactor for better result, but higher runtime 
-        coolFactor = 0.0000001 
-        T -= (t*coolFactor) 
         
-        if TotalCost(currentState,size) == 0:
-            return currentState
+        coolingFactor = 0.999
+        T = T_0*pow(coolingFactor,t)
         
-        if T <= 0:
-            #print(bs," ", ws)
-            return currentState
-
-        nextState = copy.deepcopy(currentState)
-
-        i = random.randint(0,size-1)   
+        #If totalcost becomes 0, goal is reached
+        #Can directly return 0
+        if totalCost == 0:
+            return 0
+        
+        #Temperatur becomes 0, meaning simulated annealing must be finished
+        if T == 0: 
+            return totalCost
+        
+        
+        #Random Column selection
+        i = random.randint(0,size-1)  
+        
+        currentRow = currentState[i]
+        
+        #Calculate selected queens collision amount before changing its row
+        currentQueenCost = CostQueen(currentState,i,size)
+        
+        #Random Column Statement
         j = random.randint(0,size-1)
+            
+        currentState[i] = j
         
-        nextState[i] = j
-        energy = TotalCost(nextState,size) - TotalCost(currentState,size)
+        #Calculate selected queens collision amount after changing its row
+        nextQueenCost = CostQueen(currentState,i,size)
+        
+        #energy = nextstate(energy) - currentstate(energy)
+        delta = nextQueenCost - currentQueenCost
 
-        if energy < 0:
-            #bs += 1
-            currentState = copy.deepcopy(nextState)
+        if delta <= 0:
+          
+            totalCost += delta
         
         else:
-            #ws += 1
-            if EnergyCalculator(energy,T):
-                currentState = copy.deepcopy(nextState)
+            #Calculate energy in terms of deciding whether to accept worst state or not
+            energy = totalCost + delta
+            valE = 2**(-(energy)/T)
+            rand = random.uniform(0,1)
+            #print(valE)
+            if rand < valE :
+                totalCost += delta
+            
+            else:
+                currentState[i] = currentRow
 
-        t += 1
         
-                
+        t+=1       
 
 
 def main(argv):
 
     startTime = time.time()
     board = {}
-    size = 10
+    #Size is being arranged for testing=> Don't change, not finished!
+    size = 100 #[64,128,256,512,1024]
     
     success = 0
-    k = 0
     
-    while k < 100:
+    #Trial number = 100: Easier to find avg. and percentage
+    for k in range(size):
         #Foreach columnn assign random row number => Hashmap for faster initial states search
         for i in range(size):
             rand = random.randint(0,size-1)
             board[i] = rand  #Keys are column numbers, rows are values
 
         totalCost = TotalCost(board,size)
+        print("----------------------------------")
 
-        
-        board = HillClimbing(board,size)
-        #board = FirstChoiceHillClimbing(board,size)
-        #board = SimulatedAnnealing(board,size)
+        newCost = SimulatedAnnealing(board,size,totalCost)
 
-        newCost = TotalCost(board,size)
-
+        #Amount of succesful trials 
         print('Old Cost: ', totalCost,'New Cost: ', newCost)
         if newCost == 0:
             success += 1
-        
-        k += 1
     
+    # T_0 = 18000 :Success Rate: 100% => cooling 0,999 Runtime = 750s; Success Rate:44% => cooling = 0,99 Runtime = 436s ; SucessRate: 13% => cooling = 0,98, Runtime = 246s
     #How many of 100 are succesful and run time
     print(success," " ,time.time()-startTime)
 
 if __name__ == "__main__":
     main(sys.argv)
+
+        
+                
+
+
